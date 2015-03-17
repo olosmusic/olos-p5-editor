@@ -3,6 +3,19 @@
   color: green;
 }
 
+#canvas_container {
+  position: relative;
+}
+
+#defaultCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 1px solid #ED225D;
+  margin-left: 10px;
+  display: block;
+}
+
 #container {
 /*  border: 2px solid;
   border-radius: 25px;

@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
-  <title>olos-analyser Demo</title>
+  <title>olos-p5-editor demo</title>
 
   <script src="../webcomponentsjs/webcomponents.min.js"></script>
   <script>
@@ -10,8 +10,8 @@
     var analyser;
 
     window.addEventListener('polymer-ready', function(e) {
-      analyser = document.querySelector('olos-analyser-p5');
-      console.log(analyser);
+      analyser = document.querySelector('olos-p5-editor');
+      // console.log(analyser);
 
       // osc = audioContext.createOscillator();
       // osc.start();
@@ -19,11 +19,11 @@
     });
 
   </script>
-  <link rel="import" href="olos-analyser-p5.html">
+  <link rel="import" href="olos-p5-editor.html">
   <style>
   </style>
 </head>
 <body unresolved>
-  <olos-analyser-p5></olos-analyser-p5>
+  <olos-p5-editor></olos-p5-editor>
 </body>
 </html>

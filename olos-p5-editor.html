@@ -1,0 +1,241 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../olos-code-editor/olos-code-editor.html">
+
+<!--
+olos-p5-editor
+##### Example
+
+
+@element olos-p5-editor
+@blurb 
+@status alpha
+@homepage 
+-->
+<polymer-element name="olos-p5-editor" attributes="setupFunction drawFunction">
+
+  <template>
+
+    <link rel="stylesheet" href="olos-p5-editor.css">
+
+    <label>Global Variables</label>
+    <olos-code-editor id="gvars">{{globalVars}}</olos-code-editor>
+    <label>Setup</label>
+    <olos-code-editor id="setup">{{setupFunction}}</olos-code-editor>
+    <label>Draw</label>
+    <olos-code-editor id="draw">{{drawFunction}}</olos-code-editor>
+
+    <div id="canvas_container"></div>
+
+  </template>
+    <script src="../p5js/lib/p5.js"></script>
+    <script src="../p5js/lib/addons/p5.sound.js"></script>
+
+</polymer-element>
+<script>
+
+  // temporary
+
+  Polymer('olos-p5-editor', {
+    scope: this,
+
+    // thank you https://github.com/sepans/p5-element/master/p5-element.html
+    _p5: null,
+    _sketch: {},
+    setupFunction: 'createCanvas(300, 200);\nbackground(255); \nrect(10,10,10,10);',
+    // setupFunction: "loadSound('../p5js/examples/addons/p5sound/_files/Damscray_-_Dancing_Tiger_01.mp3', gotSound)";
+
+    drawFunction: 'background(255,255,0);',
+    globalVars: '',
+
+    // store p5 instances in an array so we can delete the ones we dont want
+    _p5Array: [],
+
+    observe: {
+      setupFunction: '_createP5',
+      drawFunction: '_createP5',
+      globalVars: '_globalVarsChanged',
+      setupErr: 'setupErrChanged',
+      drawErr: 'drawErrChanged',
+    },
+
+
+    ready: function() {
+      var self = this;
+
+      self.$.gvars.codeChanged(this._globalChanged.bind(this));
+      self.$.setup.codeChanged(this._setupChanged.bind(this));
+      self.$.draw.codeChanged(this._drawChanged.bind(this));
+
+      self._globalVarsChanged();
+      self._createP5();
+    },
+
+    _createP5: function() {
+      var self = this, setupFunc = null, drawFunc = null, errors = [];
+
+      // OTHERWISE LOAD THE NEW SKETCH TYPE.
+
+      try {
+        setupFunc = new Function('with (this) {'+self.setupFunction+'}');
+        self.setupErr = '';
+      }
+      catch(e) {
+        var msg = self._parseError(e);
+        self.setupErr = 'Setup Error: ' + msg;
+        errors.push(e);
+        return;
+      }
+
+      try {
+        drawFunc = new Function('with (this) {'+self.drawFunction+'}');
+        self.drawErr = '';
+      }
+      catch(e) {
+        var msg = self._parseError(e);
+        self.drawErr = 'Draw Error: ' + msg;
+        errors.push(e);
+        return;
+      }
+
+      self._sketch = function(sketch) {
+        self._globalVarsParsed.forEach(function(item) {
+          sketch[item.name] = eval(item.value);
+        });
+
+        sketch.setup = function() {
+          try {
+            setupFunc.call(sketch);
+          }
+          catch(e) {
+            var msg = self._parseError(e);
+            self.setupErr = 'Setup Error: ' + msg;
+            errors.push(e);
+          }
+        }
+
+        sketch.draw = function() {
+          try {
+            drawFunc.call(sketch);
+          } catch(e) {
+            var msg = self._parseError(e);
+            self.drawErr = 'Draw Error: ' + msg;
+            errors.push(e);
+          }
+        }
+      };
+
+      // self._globalVarsParsed.forEach(function(item) {
+      //  self._sketch[item.name] = item.value;
+      // });
+
+
+      self._cleanUp();
+
+      try {
+        if (errors.length === 0) {
+          // make a new p5 sketch
+          self._p5 = new p5(self._sketch, self.$.canvas_container); 
+          // add this to the top of the array
+          self._p5Array.push(self._p5);
+        }
+      }
+      catch(e) {
+        var msg = self._parseError(e);
+        self.drawErr = 'Draw Error: ' + msg;
+        self._cleanUp();
+        delete self._sketch;
+        return;
+      }
+    },
+
+    _cleanUp: function() {
+      var self = this;
+      // remove all the existing sketches in the p5 array
+      for (var i = 0; i < self._p5Array.length; i++) {
+        self._p5Array[i].noLoop();
+        self._p5Array[i].remove();
+        var keys = Object.keys(self._p5Array[i]);
+        for (var j = 0; j < keys.length; j++) {
+          var key = keys[j];
+          if (self._p5Array[i][key] && typeof(self._p5Array[i][key].dispose) === 'function') {
+            console.log(self._p5Array[i][key]);
+            self._p5Array[i][key].dispose();
+            self._p5Array[i][key] = null;
+          }
+        }
+        self._p5Array.pop();
+      }
+
+      // this shouldn't be necessary, but sometimes it is...
+      for (var j = 0; j < this.$.canvas_container.children.length - 1; j++) {
+        this.$.canvas_container.children[j].remove();
+      }
+    },
+
+    // callbacks from olos-code-editor / codemirror
+    _setupChanged: function(f) {
+      var self = this;
+      self.setupFunction = f;
+      self._createP5();
+    },
+
+    // callbacks from olos-code-editor / codemirror
+    _drawChanged: function(f) {
+      var self = this;
+      self.drawFunction = f;
+      self._createP5();
+    },
+
+    _globalChanged: function(f) {
+      var self = this;
+      self.globalVars = f;
+    },
+
+    _globalVarsChanged: function() {
+      var self = this;
+      self._globalVarsParsed = [];
+      // var varList = self.globalVars.split(/["var",\n;]/g);
+      var varList = self.globalVars.split(/["var",]/g);
+
+      self._globalVarsParsed = varList.map(function(item) {
+        var splits = item.split('=');
+        var value = splits.length>1 ? splits[1] : null;
+        var parsedValue = (!isNaN(parseFloat(value)) && isFinite(value)) ? parseFloat(value) : value;
+        return {
+          name: splits[0].trim(),
+          value: parsedValue
+        }
+      });
+      self._createP5();
+    },
+
+    setupErrChanged: function() {
+      console.log(this.setupErr);
+    },
+
+    drawErrChanged: function() {
+      console.log(this.drawErr);
+    },
+
+    // return errorMsg and lineNumber
+    _parseError: function(e) {
+      if (typeof(e) !== 'undefined' && typeof(e.stack) !== 'undefined') {
+        var lStart = e.stack.indexOf('<anonymous>:') + 12;
+        var errLine = '. Line: ' + e.stack.substr(lStart, 7).split(')')[0];
+        // console.log(e.message + errLine);
+        return e.message + errLine;
+      }
+    },
+
+    // _parseGlobal: function(text) {
+    //   if (typeof(text) !== 'undefined') {
+    //     self._runnable = text;//.replace(/^\s+|\s+$/g, '');
+    //   } else {
+    //     self._runnable = '';
+    //   }
+    // }
+
+
+  });
+
+</script>
